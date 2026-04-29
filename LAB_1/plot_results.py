@@ -25,3 +25,17 @@ plt.ylabel("Time, seconds")
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig(ROOT / "time_vs_size.png", dpi=160)
+
+base = data.iloc[0]
+theoretical = base["time_sec"] * (data["size"] / base["size"]) ** 3
+
+plt.figure(figsize=(8, 5))
+plt.plot(data["size"], data["time_sec"], marker="o", label="Measured median")
+plt.plot(data["size"], theoretical, linestyle="--", marker="s", label="O(N^3) estimate")
+plt.title("Measured time and O(N^3) growth")
+plt.xlabel("Matrix size N")
+plt.ylabel("Time, seconds")
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.savefig(ROOT / "complexity_growth.png", dpi=160)

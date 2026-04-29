@@ -5,6 +5,7 @@
 #endif
 
 #include <cmath>
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -216,6 +217,7 @@ int main(int argc, char* argv[]) {
         check_cl(status, "Cannot create OpenCL kernel");
 
         const std::size_t bytes = static_cast<std::size_t>(n) * n * sizeof(float);
+        const auto opencl_started = std::chrono::steady_clock::now();
         cl_mem device_a =
             clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, bytes,
                            const_cast<float*>(a.data()), &status);
@@ -262,6 +264,7 @@ int main(int argc, char* argv[]) {
         Matrix c(static_cast<std::size_t>(n) * n);
         check_cl(clEnqueueReadBuffer(queue, device_c, CL_TRUE, 0, bytes, c.data(), 0, nullptr, nullptr),
                  "Cannot read result matrix");
+        const auto opencl_finished = std::chrono::steady_clock::now();
         write_matrix(argv[3], c, n);
 
         clReleaseEvent(event);
@@ -273,12 +276,15 @@ int main(int argc, char* argv[]) {
         clReleaseCommandQueue(queue);
         clReleaseContext(context);
 
-        const double elapsed_ms = static_cast<double>(finished - started) / 1'000'000.0;
+        const double kernel_elapsed_ms = static_cast<double>(finished - started) / 1'000'000.0;
+        const std::chrono::duration<double, std::milli> opencl_elapsed =
+            opencl_finished - opencl_started;
         std::cout << "size=" << n << '\n';
         std::cout << "local_size=" << local_size << '\n';
         std::cout << "mode=" << mode << '\n';
         std::cout << "device=" << get_device_name(device) << '\n';
-        std::cout << "time_ms=" << std::fixed << std::setprecision(3) << elapsed_ms << '\n';
+        std::cout << "kernel_time_ms=" << std::fixed << std::setprecision(3) << kernel_elapsed_ms << '\n';
+        std::cout << "time_ms=" << std::fixed << std::setprecision(3) << opencl_elapsed.count() << '\n';
     } catch (const std::exception& error) {
         std::cerr << "Error: " << error.what() << '\n';
         return 1;

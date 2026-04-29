@@ -20,7 +20,7 @@ def write_matrix(path: Path, matrix: np.ndarray) -> None:
 
 
 def parse_time(output: str) -> float:
-    match = re.search(r"time_ms=([0-9.]+)", output)
+    match = re.search(r"^time_ms=([0-9.]+)", output, re.MULTILINE)
     if not match:
         raise RuntimeError(f"Cannot parse execution time:\n{output}")
     return float(match.group(1))
@@ -29,7 +29,7 @@ def parse_time(output: str) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run OpenCL matrix multiplication benchmark.")
     parser.add_argument("--binary", default=str(ROOT / "matrix_opencl"))
-    parser.add_argument("--sizes", default="256,512,1024,1600,2000")
+    parser.add_argument("--sizes", default="200,400,800,1200,1600,2000")
     parser.add_argument("--local-sizes", default="4,8,16")
     parser.add_argument("--modes", default="naive,tiled")
     parser.add_argument("--output", default=str(ROOT / "results.csv"))
