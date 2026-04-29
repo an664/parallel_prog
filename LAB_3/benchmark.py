@@ -2,6 +2,7 @@
 import argparse
 import csv
 import re
+import statistics
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,11 +32,14 @@ def main() -> None:
     parser.add_argument("--sizes", default="200,400,800,1200,1600,2000")
     parser.add_argument("--processes", default="1,2,4,8")
     parser.add_argument("--output", default=str(ROOT / "results.csv"))
+    parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=2026)
     args = parser.parse_args()
 
     sizes = [int(item) for item in args.sizes.split(",") if item]
     process_counts = [int(item) for item in args.processes.split(",") if item]
+    if args.repeats <= 0:
+        raise SystemExit("--repeats must be positive")
     rows = []
 
     with tempfile.TemporaryDirectory(prefix="lab3_") as tmp:
@@ -53,45 +57,69 @@ def main() -> None:
             write_matrix(b_path, b)
 
             for process_count in process_counts:
-                completed = subprocess.run(
-                    [
-                        "mpirun",
-                        "--map-by",
-                        "slot",
-                        "--oversubscribe",
-                        "-np",
-                        str(process_count),
-                        args.binary,
-                        str(a_path),
-                        str(b_path),
-                        str(c_path),
-                    ],
-                    check=True,
-                    text=True,
-                    capture_output=True,
-                )
-                elapsed = parse_time(completed.stdout)
-                c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
-                max_error = float(np.max(np.abs(c - expected)))
+                times = []
+                max_error = 0.0
+                for repeat in range(1, args.repeats + 1):
+                    completed = subprocess.run(
+                        [
+                            "mpirun",
+                            "--map-by",
+                            "slot",
+                            "--oversubscribe",
+                            "-np",
+                            str(process_count),
+                            args.binary,
+                            str(a_path),
+                            str(b_path),
+                            str(c_path),
+                        ],
+                        check=True,
+                        text=True,
+                        capture_output=True,
+                    )
+                    elapsed = parse_time(completed.stdout)
+                    c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
+                    max_error = max(max_error, float(np.max(np.abs(c - expected))))
+                    times.append(elapsed)
+                    print(f"N={size}, processes={process_count}, repeat={repeat}: {elapsed:.6f}s")
+
+                median_time = statistics.median(times)
                 rows.append(
                     {
                         "size": size,
                         "processes": process_count,
                         "operations": int(2 * size**3),
-                        "time_sec": elapsed,
+                        "repeats": args.repeats,
+                        "time_sec": median_time,
+                        "time_median_sec": median_time,
+                        "time_mean_sec": statistics.fmean(times),
+                        "time_min_sec": min(times),
+                        "time_std_sec": statistics.stdev(times) if len(times) > 1 else 0.0,
                         "max_abs_error": max_error,
                     }
                 )
                 print(
                     f"N={size}, processes={process_count}: "
-                    f"{elapsed:.6f}s, max_abs_error={max_error:.3e}"
+                    f"median={median_time:.6f}s, max_abs_error={max_error:.3e}"
                 )
 
     output = Path(args.output)
     with output.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=["size", "processes", "operations", "time_sec", "max_abs_error"],
+            lineterminator="\n",
+            fieldnames=[
+                "size",
+                "processes",
+                "operations",
+                "repeats",
+                "time_sec",
+                "time_median_sec",
+                "time_mean_sec",
+                "time_min_sec",
+                "time_std_sec",
+                "max_abs_error",
+            ],
         )
         writer.writeheader()
         writer.writerows(rows)

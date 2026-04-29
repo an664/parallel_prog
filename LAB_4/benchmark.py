@@ -2,7 +2,7 @@
 import argparse
 import csv
 import re
-import shutil
+import statistics
 import subprocess
 import tempfile
 from pathlib import Path
@@ -27,21 +27,21 @@ def parse_time(output: str) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run CUDA matrix multiplication benchmark.")
-    parser.add_argument("--binary", default=str(ROOT / "matrix_cuda"))
+    parser = argparse.ArgumentParser(description="Run OpenCL matrix multiplication benchmark.")
+    parser.add_argument("--binary", default=str(ROOT / "matrix_opencl"))
     parser.add_argument("--sizes", default="256,512,1024,1600,2000")
-    parser.add_argument("--blocks", default="8,16,32")
+    parser.add_argument("--local-sizes", default="4,8,16")
     parser.add_argument("--modes", default="naive,tiled")
     parser.add_argument("--output", default=str(ROOT / "results.csv"))
+    parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=2026)
     args = parser.parse_args()
 
-    if shutil.which("nvcc") is None and not Path(args.binary).exists():
-        raise SystemExit("CUDA benchmark requires nvcc or an already built matrix_cuda binary.")
-
     sizes = [int(item) for item in args.sizes.split(",") if item]
-    blocks = [int(item) for item in args.blocks.split(",") if item]
+    local_sizes = [int(item) for item in args.local_sizes.split(",") if item]
     modes = [item for item in args.modes.split(",") if item]
+    if args.repeats <= 0:
+        raise SystemExit("--repeats must be positive")
     rows = []
 
     with tempfile.TemporaryDirectory(prefix="lab4_") as tmp:
@@ -58,36 +58,63 @@ def main() -> None:
             write_matrix(a_path, a)
             write_matrix(b_path, b)
 
-            for block_size in blocks:
+            for local_size in local_sizes:
                 for mode in modes:
-                    completed = subprocess.run(
-                        [args.binary, str(a_path), str(b_path), str(c_path), str(block_size), mode],
-                        check=True,
-                        text=True,
-                        capture_output=True,
-                    )
-                    elapsed_ms = parse_time(completed.stdout)
-                    c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
-                    max_error = float(np.max(np.abs(c - expected)))
+                    times = []
+                    max_error = 0.0
+                    for repeat in range(1, args.repeats + 1):
+                        completed = subprocess.run(
+                            [args.binary, str(a_path), str(b_path), str(c_path), str(local_size), mode],
+                            check=True,
+                            text=True,
+                            capture_output=True,
+                        )
+                        elapsed_ms = parse_time(completed.stdout)
+                        c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
+                        max_error = max(max_error, float(np.max(np.abs(c - expected))))
+                        times.append(elapsed_ms)
+                        print(
+                            f"N={size}, local={local_size}, mode={mode}, "
+                            f"repeat={repeat}: {elapsed_ms:.3f}ms"
+                        )
+
+                    median_time = statistics.median(times)
                     rows.append(
                         {
                             "size": size,
-                            "block_size": block_size,
+                            "local_size": local_size,
                             "mode": mode,
-                            "time_ms": elapsed_ms,
+                            "repeats": args.repeats,
+                            "time_ms": median_time,
+                            "time_median_ms": median_time,
+                            "time_mean_ms": statistics.fmean(times),
+                            "time_min_ms": min(times),
+                            "time_std_ms": statistics.stdev(times) if len(times) > 1 else 0.0,
                             "max_abs_error": max_error,
                         }
                     )
                     print(
-                        f"N={size}, block={block_size}, mode={mode}: "
-                        f"{elapsed_ms:.3f}ms, max_abs_error={max_error:.3e}"
+                        f"N={size}, local={local_size}, mode={mode}: "
+                        f"median={median_time:.3f}ms, max_abs_error={max_error:.3e}"
                     )
 
     output = Path(args.output)
     with output.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=["size", "block_size", "mode", "time_ms", "max_abs_error"],
+            lineterminator="\n",
+            fieldnames=[
+                "size",
+                "local_size",
+                "mode",
+                "repeats",
+                "time_ms",
+                "time_median_ms",
+                "time_mean_ms",
+                "time_min_ms",
+                "time_std_ms",
+                "max_abs_error",
+            ],
         )
         writer.writeheader()
         writer.writerows(rows)

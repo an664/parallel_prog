@@ -2,6 +2,7 @@
 import argparse
 import csv
 import re
+import statistics
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,11 +32,14 @@ def main() -> None:
     parser.add_argument("--sizes", default="200,400,800,1200,1600,2000")
     parser.add_argument("--threads", default="1,2,4,8,10")
     parser.add_argument("--output", default=str(ROOT / "results.csv"))
+    parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=2026)
     args = parser.parse_args()
 
     sizes = [int(item) for item in args.sizes.split(",") if item]
     threads = [int(item) for item in args.threads.split(",") if item]
+    if args.repeats <= 0:
+        raise SystemExit("--repeats must be positive")
     rows = []
 
     with tempfile.TemporaryDirectory(prefix="lab2_") as tmp:
@@ -53,31 +57,58 @@ def main() -> None:
             write_matrix(b_path, b)
 
             for thread_count in threads:
-                completed = subprocess.run(
-                    [args.binary, str(a_path), str(b_path), str(c_path), str(thread_count)],
-                    check=True,
-                    text=True,
-                    capture_output=True,
-                )
-                elapsed = parse_time(completed.stdout)
-                c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
-                max_error = float(np.max(np.abs(c - expected)))
+                times = []
+                max_error = 0.0
+                for repeat in range(1, args.repeats + 1):
+                    completed = subprocess.run(
+                        [args.binary, str(a_path), str(b_path), str(c_path), str(thread_count)],
+                        check=True,
+                        text=True,
+                        capture_output=True,
+                    )
+                    elapsed = parse_time(completed.stdout)
+                    c = np.loadtxt(c_path, skiprows=1).reshape((size, size))
+                    max_error = max(max_error, float(np.max(np.abs(c - expected))))
+                    times.append(elapsed)
+                    print(f"N={size}, threads={thread_count}, repeat={repeat}: {elapsed:.6f}s")
+
+                median_time = statistics.median(times)
                 rows.append(
                     {
                         "size": size,
                         "threads": thread_count,
                         "operations": int(2 * size**3),
-                        "time_sec": elapsed,
+                        "repeats": args.repeats,
+                        "time_sec": median_time,
+                        "time_median_sec": median_time,
+                        "time_mean_sec": statistics.fmean(times),
+                        "time_min_sec": min(times),
+                        "time_std_sec": statistics.stdev(times) if len(times) > 1 else 0.0,
                         "max_abs_error": max_error,
                     }
                 )
-                print(f"N={size}, threads={thread_count}: {elapsed:.6f}s, max_abs_error={max_error:.3e}")
+                print(
+                    f"N={size}, threads={thread_count}: "
+                    f"median={median_time:.6f}s, max_abs_error={max_error:.3e}"
+                )
 
     output = Path(args.output)
     with output.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=["size", "threads", "operations", "time_sec", "max_abs_error"],
+            lineterminator="\n",
+            fieldnames=[
+                "size",
+                "threads",
+                "operations",
+                "repeats",
+                "time_sec",
+                "time_median_sec",
+                "time_mean_sec",
+                "time_min_sec",
+                "time_std_sec",
+                "max_abs_error",
+            ],
         )
         writer.writeheader()
         writer.writerows(rows)

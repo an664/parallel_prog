@@ -1,10 +1,11 @@
-NVCC ?= nvcc
-NVCCFLAGS ?= -O3 -std=c++17
+CXX = clang++
+CXXFLAGS ?= -O3 -std=c++17 -Wall -Wextra
+LDFLAGS ?= -framework OpenCL
 
-all: matrix_cuda
+all: matrix_opencl
 
-matrix_cuda: matrix_cuda.cu
-	$(NVCC) $(NVCCFLAGS) matrix_cuda.cu -o matrix_cuda
+matrix_opencl: matrix_opencl.cpp
+	$(CXX) $(CXXFLAGS) matrix_opencl.cpp $(LDFLAGS) -o matrix_opencl
 
 clean:
-	rm -f matrix_cuda
+	rm -f matrix_opencl

@@ -11,7 +11,7 @@ generated/
 LAB_1/matrix_seq
 LAB_2/matrix_omp
 LAB_3/matrix_mpi
-LAB_4/matrix_cuda
+LAB_4/matrix_opencl
 
 A.txt
 B.txt

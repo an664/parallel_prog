@@ -2,7 +2,7 @@
 
 Репозиторий содержит лабораторные работы по курсу «Параллельное программирование».
 Основная вычислительная задача во всех работах: перемножение двух квадратных матриц
-без использования библиотечной функции умножения в основной C/C++/CUDA реализации.
+без использования библиотечной функции умножения в основной C/C++/OpenCL реализации.
 
 Всего в курсе 5 лабораторных работ. В репозитории подготовлены первые 4 работы.
 Лабораторная работа №5 не включена, потому что для нее нужен доступ к
@@ -15,7 +15,7 @@
 | `LAB_1` | Последовательное умножение матриц | [LAB_1/README.md](./LAB_1/README.md) |
 | `LAB_2` | OpenMP-версия | [LAB_2/README.md](./LAB_2/README.md) |
 | `LAB_3` | MPI-версия | [LAB_3/README.md](./LAB_3/README.md) |
-| `LAB_4` | CUDA-версия | [LAB_4/README.md](./LAB_4/README.md) |
+| `LAB_4` | OpenCL-версия для GPU | [LAB_4/README.md](./LAB_4/README.md) |
 
 ## Общий формат данных
 
@@ -35,8 +35,12 @@
 ## Верификация
 
 Для каждой лабораторной работы есть скрипт `verify.py`, который вычисляет
-эталонный результат через NumPy и сравнивает его с результатом C/C++/CUDA
+эталонный результат через NumPy и сравнивает его с результатом C/C++/OpenCL
 программы через `numpy.allclose`.
+
+Каждая экспериментальная конфигурация запускается 3 раза. В таблицах и на
+графиках основным временем считается медиана повторов, а в CSV дополнительно
+сохраняются среднее, минимум и стандартное отклонение.
 
 ## Среда локальных экспериментов
 
@@ -46,8 +50,9 @@
 - OpenMP: Homebrew GCC `g++-15`.
 - MPI: Open MPI 5.0.8 через `mpicxx` / `mpirun`.
 - Python: NumPy, pandas, matplotlib.
-- CUDA: локально `nvcc` не установлен, NVIDIA GPU недоступен; код и сценарии
-  для CUDA подготовлены, но фактический запуск должен выполняться на CUDA-хосте.
+- GPU: Apple M1 Pro, 16 GPU cores.
+- OpenCL: системный Apple OpenCL framework. CUDA локально невозможна, потому что
+  CUDA поддерживается только NVIDIA GPU.
 
 ## Быстрый запуск
 
@@ -76,11 +81,11 @@ mpirun --map-by slot --oversubscribe -np 4 ./matrix_mpi sample_A.txt sample_B.tx
 python3 verify.py sample_A.txt sample_B.txt result.txt
 ```
 
-Для CUDA на машине с NVIDIA CUDA Toolkit:
+Для OpenCL:
 
 ```bash
 cd LAB_4
 make
-./matrix_cuda sample_A.txt sample_B.txt result.txt 16 tiled
+./matrix_opencl sample_A.txt sample_B.txt result.txt 16 tiled
 python3 verify.py sample_A.txt sample_B.txt result.txt
 ```
