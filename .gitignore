@@ -12,6 +12,9 @@ LAB_1/matrix_seq
 LAB_2/matrix_omp
 LAB_3/matrix_mpi
 LAB_4/matrix_opencl
+LAB_5/matrix_mpi_cluster
+LAB_5/lab5_*.out
+LAB_5/slurm-*.out
 
 A.txt
 B.txt
